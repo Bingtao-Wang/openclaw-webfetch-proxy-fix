@@ -25,6 +25,8 @@
 
 **web_fetch 仍然报 DNS 解析失败。**
 
+![修复前：ENOTFOUND 错误](docs/ENOTFOUND%20github.com.png)
+
 ## 根因
 
 OpenClaw 的 web_fetch 存在**两个代码层面的问题**，导致它无法使用代理：
@@ -57,6 +59,8 @@ openclaw gateway
 ```
 
 ## 修复效果
+
+![修复后：web_fetch 成功](docs/Web_fetch_成功.png)
 
 ```
 修复前:
