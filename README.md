@@ -1,5 +1,11 @@
 # OpenClaw web_fetch Proxy Fix
 
+[![GitHub stars](https://img.shields.io/github/stars/Bingtao-Wang/openclaw-webfetch-proxy-fix?style=social)](https://github.com/Bingtao-Wang/openclaw-webfetch-proxy-fix)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+[![GitHub stars](https://img.shields.io/github/stars/Bingtao-Wang/openclaw-webfetch-proxy-fix?style=social)](https://github.com/Bingtao-Wang/openclaw-webfetch-proxy-fix)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 > **Make OpenClaw's `web_fetch` tool work behind a proxy in China mainland**
 >
 > Works with **any** HTTP proxy: Clash, V2Ray, SSR, Shadowsocks, etc.
