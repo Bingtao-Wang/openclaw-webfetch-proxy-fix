@@ -1,19 +1,46 @@
 # ============================================
-# OpenClaw Gateway Monitor Script
+# OpenClaw Gateway Monitor Script (Proxy-agnostic)
+#
 # Runs continuously, checks every 2 minutes:
-#   1. Is Clash proxy alive? If not, restart it
+#   1. Is the proxy port reachable? Log warning if not
 #   2. Is Gateway alive? If not, restart it
+#
+# Works with ANY proxy software (Clash, V2Ray, SSR, etc.)
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File monitor-gateway.ps1
+#
+# Configuration:
+#   Edit the variables below, or pass parameters:
+#   .\monitor-gateway.ps1 -ProxyPort 7897 -GatewayPort 18789
 # ============================================
 
-$LogFile = "E:\OpenClawDOC\logs\monitor-gateway.log"  # <-- Modify
-$ClashExe = 'C:\Program Files\Clash Verge\Clash Verge.exe'  # <-- Modify
-$ProxyPort = 7897           # <-- Modify to your proxy port
-$GatewayPort = 18789        # <-- Modify to your gateway port
-$GatewayCmd = "$env:HOME\.openclaw\gateway.cmd"  # <-- Modify
+param(
+    [int]$ProxyPort = 7897,
+    [int]$GatewayPort = 18789,
+    [string]$GatewayCmd = "",
+    [string]$LogFile = "",
+    [int]$Interval = 120
+)
 
+# Auto-detect gateway.cmd
+if (-not $GatewayCmd) {
+    $candidates = @(
+        "$env:HOME\.openclaw\gateway.cmd",
+        "$env:USERPROFILE\.openclaw\gateway.cmd"
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) { $GatewayCmd = $c; break }
+    }
+}
+
+# Auto-detect log path
+if (-not $LogFile) {
+    $logDir = Split-Path $GatewayCmd -Parent
+    if ($logDir) { $LogFile = Join-Path (Split-Path $logDir -Parent) "logs\monitor-gateway.log" }
+}
+
+# Set proxy env vars
 $env:HTTP_PROXY  = "http://127.0.0.1:$ProxyPort"
 $env:HTTPS_PROXY = "http://127.0.0.1:$ProxyPort"
 $env:ALL_PROXY   = "http://127.0.0.1:$ProxyPort"
@@ -24,61 +51,49 @@ function Write-Log {
     $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $line = "[$ts] $Message"
     Write-Host $line
-    if ($LogFile) { Add-Content -Path $LogFile -Value $line -Encoding UTF8 }
+    if ($LogFile) {
+        $dir = Split-Path $LogFile -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        Add-Content -Path $LogFile -Value $line -Encoding UTF8
+    }
 }
 
-function Test-Proxy {
+function Test-Port {
+    param([int]$Port)
     try {
         $tcp = New-Object System.Net.Sockets.TcpClient
-        $tcp.Connect('127.0.0.1', $ProxyPort)
+        $tcp.Connect('127.0.0.1', $Port)
         $tcp.Close()
         return $true
     } catch { return $false }
 }
 
-function Ensure-Clash {
-    if (-not (Test-Proxy)) {
-        Write-Log "Clash proxy unavailable on port $ProxyPort, attempting to start..."
-        $clashProc = Get-Process -Name 'Clash Verge' -ErrorAction SilentlyContinue
-        if (-not $clashProc -and (Test-Path $ClashExe)) {
-            Start-Process -FilePath $ClashExe -WindowStyle Minimized
-            Write-Log "Clash Verge process started"
-        }
-        for ($i = 0; $i -lt 15; $i++) {
-            Start-Sleep -Seconds 2
-            if (Test-Proxy) {
-                Write-Log "Clash proxy is ready"
-                return $true
-            }
-        }
-        Write-Log "WARNING: Clash proxy start timeout (30s)"
-        return $false
-    }
-    return $true
-}
-
 Write-Log "========== MONITOR STARTED =========="
+Write-Log "Proxy port: $ProxyPort | Gateway port: $GatewayPort"
+Write-Log "Check interval: ${Interval}s"
 
 while ($true) {
-    # Step 1: Ensure Clash proxy is alive
-    $proxyOk = Ensure-Clash
+    # Step 1: Check proxy port
+    $proxyOk = Test-Port $ProxyPort
+    if (-not $proxyOk) {
+        Write-Log "WARNING: Proxy port $ProxyPort not reachable (start your proxy software)"
+    }
 
     # Step 2: Check gateway
-    try {
-        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$GatewayPort" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
-        Write-Log "Gateway OK (HTTP $($response.StatusCode)) | Proxy: $proxyOk"
-    }
-    catch {
+    $gatewayOk = Test-Port $GatewayPort
+    if ($gatewayOk) {
+        Write-Log "Gateway OK on port $GatewayPort | Proxy: $proxyOk"
+    } else {
         Write-Log "Gateway NOT responding on port $GatewayPort, restarting..."
-        if (Test-Path $GatewayCmd) {
+        if ($GatewayCmd -and (Test-Path $GatewayCmd)) {
             Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$GatewayCmd`"" -WindowStyle Hidden
             Write-Log "Gateway restart command issued"
         } else {
-            Write-Log "WARNING: gateway.cmd not found at $GatewayCmd"
+            Write-Log "WARNING: gateway.cmd not found. Set -GatewayCmd parameter."
         }
         Start-Sleep -Seconds 10
     }
 
-    # Wait 2 minutes before next check
-    Start-Sleep -Seconds 120
+    # Wait before next check
+    Start-Sleep -Seconds $Interval
 }

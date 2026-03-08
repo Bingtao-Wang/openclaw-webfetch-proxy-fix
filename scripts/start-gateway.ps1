@@ -1,34 +1,62 @@
 # ============================================
-# OpenClaw Gateway Startup Script (with Clash proxy detection + logging)
-# Ensures proxy is running before starting the gateway
+# OpenClaw Gateway Startup Script (Proxy-agnostic)
+#
+# Before starting the gateway, checks if the configured proxy port
+# is reachable. Works with ANY proxy software (Clash, V2Ray, SSR, etc.)
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File start-gateway.ps1
+#
+# Configuration:
+#   Edit the variables below, or pass parameters:
+#   .\start-gateway.ps1 -ProxyPort 7897 -MaxWait 60
 # ============================================
 
-$LogFile = "E:\OpenClawDOC\logs\start-gateway.log"
-$ClashExe = 'C:\Program Files\Clash Verge\Clash Verge.exe'  # <-- Modify to your Clash path
-$ProxyPort = 7897                                             # <-- Modify to your proxy port
-$MaxWait = 60
-$GatewayCmd = "$env:HOME\.openclaw\gateway.cmd"               # <-- Modify to your gateway.cmd path
+param(
+    [int]$ProxyPort = 7897,
+    [int]$GatewayPort = 18789,
+    [int]$MaxWait = 60,
+    [string]$GatewayCmd = "",
+    [string]$LogFile = ""
+)
+
+# Auto-detect gateway.cmd
+if (-not $GatewayCmd) {
+    $candidates = @(
+        "$env:HOME\.openclaw\gateway.cmd",
+        "$env:USERPROFILE\.openclaw\gateway.cmd"
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) { $GatewayCmd = $c; break }
+    }
+}
+
+# Auto-detect log path
+if (-not $LogFile) {
+    $logDir = Split-Path $GatewayCmd -Parent
+    if ($logDir) { $LogFile = Join-Path (Split-Path $logDir -Parent) "logs\start-gateway.log" }
+}
 
 function Write-Log {
     param([string]$Message)
     $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $line = "[$ts] $Message"
     Write-Host $line
-    if ($LogFile) { Add-Content -Path $LogFile -Value $line -Encoding UTF8 }
+    if ($LogFile) {
+        $dir = Split-Path $LogFile -Parent
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        Add-Content -Path $LogFile -Value $line -Encoding UTF8
+    }
 }
 
-function Test-Proxy {
+function Test-Port {
+    param([int]$Port)
     try {
         $tcp = New-Object System.Net.Sockets.TcpClient
-        $tcp.Connect('127.0.0.1', $ProxyPort)
+        $tcp.Connect('127.0.0.1', $Port)
         $tcp.Close()
         return $true
-    } catch {
-        return $false
-    }
+    } catch { return $false }
 }
 
 # Set proxy env vars
@@ -38,46 +66,46 @@ $env:ALL_PROXY   = "http://127.0.0.1:$ProxyPort"
 $env:NO_PROXY    = 'localhost,127.0.0.1'
 
 Write-Log "========== START-GATEWAY BEGIN =========="
-Write-Log "Proxy env: HTTP_PROXY=$env:HTTP_PROXY"
+Write-Log "Proxy: http://127.0.0.1:$ProxyPort"
+Write-Log "Gateway cmd: $GatewayCmd"
 
-# Step 1: Check/start Clash proxy
-if (-not (Test-Proxy)) {
-    Write-Log "Clash proxy not detected on port $ProxyPort, starting..."
-
-    $clashProc = Get-Process -Name 'Clash Verge' -ErrorAction SilentlyContinue
-    if (-not $clashProc -and (Test-Path $ClashExe)) {
-        Start-Process -FilePath $ClashExe -WindowStyle Minimized
-        Write-Log "Clash Verge process started"
-    }
-
+# Step 1: Wait for proxy port to be available
+if (-not (Test-Port $ProxyPort)) {
+    Write-Log "Proxy port $ProxyPort not available, waiting up to $MaxWait s..."
+    Write-Log "  (Please start your proxy software: Clash, V2Ray, SSR, etc.)"
     $waited = 0
-    while (-not (Test-Proxy) -and $waited -lt $MaxWait) {
+    while (-not (Test-Port $ProxyPort) -and $waited -lt $MaxWait) {
         Start-Sleep -Seconds 2
         $waited += 2
-        Write-Log "Waiting for Clash proxy... ($waited/$MaxWait s)"
+        if ($waited % 10 -eq 0) {
+            Write-Log "  Still waiting for proxy... ($waited/$MaxWait s)"
+        }
     }
-
-    if (-not (Test-Proxy)) {
-        Write-Log "WARNING: Clash proxy not ready after $MaxWait s"
+    if (-not (Test-Port $ProxyPort)) {
+        Write-Log "WARNING: Proxy port $ProxyPort not ready after $MaxWait s, starting gateway anyway"
     } else {
-        Write-Log "Clash proxy is ready on port $ProxyPort"
+        Write-Log "Proxy port $ProxyPort is ready"
     }
 } else {
-    Write-Log "Clash proxy already running on port $ProxyPort"
+    Write-Log "Proxy port $ProxyPort is already available"
 }
 
-# Step 2: Start OpenClaw Gateway
+# Step 2: Start gateway
+if (-not $GatewayCmd -or -not (Test-Path $GatewayCmd)) {
+    Write-Log "ERROR: gateway.cmd not found. Set -GatewayCmd parameter."
+    exit 1
+}
+
 Write-Log "Starting OpenClaw Gateway..."
 Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"$GatewayCmd`"" -WindowStyle Hidden
-Write-Log "OpenClaw Gateway process launched"
+Write-Log "Gateway process launched"
 
 # Step 3: Verify
 Start-Sleep -Seconds 8
-try {
-    $resp = Invoke-WebRequest -Uri "http://127.0.0.1:18789" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
-    Write-Log "Gateway verified: HTTP $($resp.StatusCode)"
-} catch {
-    Write-Log "Gateway verification: not responding yet (may still be starting)"
+if (Test-Port $GatewayPort) {
+    Write-Log "Gateway verified on port $GatewayPort"
+} else {
+    Write-Log "Gateway not responding on port $GatewayPort yet (may still be starting)"
 }
 
 Write-Log "========== START-GATEWAY END =========="
