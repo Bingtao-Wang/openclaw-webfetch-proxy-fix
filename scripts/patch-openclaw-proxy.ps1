@@ -55,12 +55,12 @@ $fileCount = 0
 Write-Host "[Patch A] Adding useEnvProxy:true to runWebFetch()..." -ForegroundColor Yellow
 
 $filesA = Get-ChildItem -Path $DistPath -Recurse -Filter "*.js" | Where-Object {
-    $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+    $content = Get-Content $_.FullName -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
     $content -match 'async function runWebFetch' -and $content -match 'fetchWithWebToolsNetworkGuard'
 }
 
 foreach ($file in $filesA) {
-    $content = Get-Content $file.FullName -Raw
+    $content = Get-Content $file.FullName -Raw -Encoding UTF8
     $oldPattern = 'const result = await fetchWithWebToolsNetworkGuard({
 			url: params.url,
 			maxRedirects: params.maxRedirects,
@@ -97,7 +97,7 @@ Write-Host "[Patch B] Reordering fetch-guard DNS/proxy logic..." -ForegroundColo
 $fetchGuardFiles = Get-ChildItem -Path $DistPath -Recurse -Filter "fetch-guard-*.js"
 
 foreach ($file in $fetchGuardFiles) {
-    $content = Get-Content $file.FullName -Raw
+    $content = Get-Content $file.FullName -Raw -Encoding UTF8
     $oldBlock = '		let dispatcher = null;
 		try {
 			const pinned = await resolvePinnedHostnameWithPolicy(parsedUrl.hostname, {
@@ -141,12 +141,12 @@ Write-Host ""
 Write-Host "[Patch C] Updating withStrictWebToolsEndpoint()..." -ForegroundColor Yellow
 
 $filesC = Get-ChildItem -Path $DistPath -Recurse -Filter "*.js" | Where-Object {
-    $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+    $content = Get-Content $_.FullName -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
     $content -match 'async function withStrictWebToolsEndpoint'
 }
 
 foreach ($file in $filesC) {
-    $content = Get-Content $file.FullName -Raw
+    $content = Get-Content $file.FullName -Raw -Encoding UTF8
     $oldFunc = 'async function withStrictWebToolsEndpoint(params, run) {
 	return await withWebToolsNetworkGuard(params, run);
 }'
