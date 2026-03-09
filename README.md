@@ -75,6 +75,22 @@ openclaw gateway stop
 openclaw gateway
 ```
 
+> **⚠️ 重要提醒：每次更新 OpenClaw 后必须重新运行 patch！**
+>
+> 当你运行 `npm update openclaw` 时，新版本会覆盖 dist 目录中所有文件，之前的 patch 修改会丢失。
+>
+> **更新后的操作流程：**
+> ```powershell
+> # 1. 更新 OpenClaw
+> npm update -g openclaw
+>
+> # 2. 重新运行 patch（必须！）
+> powershell -ExecutionPolicy Bypass -File scripts/patch-openclaw-proxy.ps1
+>
+> # 3. 重启网关
+> openclaw gateway stop && openclaw gateway
+> ```
+
 ### 找不到 dist 目录？
 
 脚本需要找到 OpenClaw 的 `dist` 目录（编译后的 JavaScript 文件所在位置）。默认搜索路径：
