@@ -75,6 +75,41 @@ openclaw gateway stop
 openclaw gateway
 ```
 
+### 找不到 dist 目录？
+
+脚本需要找到 OpenClaw 的 `dist` 目录（编译后的 JavaScript 文件所在位置）。默认搜索路径：
+
+```
+%APPDATA%\npm\node_modules\openclaw\dist      # npm 全局安装（最常见）
+%LOCALAPPDATA%\npm\node_modules\openclaw\dist
+```
+
+**如果脚本报错找不到 dist 目录：**
+
+1. **找到你的 OpenClaw 安装位置：**
+   ```bash
+   # 查看 openclaw 命令位置
+   where openclaw        # Windows
+   which openclaw        # Linux/Mac
+
+   # 或用 npm 查看全局安装路径
+   npm list -g openclaw
+   ```
+
+2. **手动指定路径运行：**
+   ```powershell
+   .\scripts\patch-openclaw-proxy.ps1 -DistPath "你的路径\openclaw\dist"
+   ```
+
+   例如：
+   ```powershell
+   # yarn 全局安装
+   .\scripts\patch-openclaw-proxy.ps1 -DistPath "C:\Users\你的用户名\AppData\Local\Yarn\Data\global\node_modules\openclaw\dist"
+
+   # 项目本地安装
+   .\scripts\patch-openclaw-proxy.ps1 -DistPath "D:\my-project\node_modules\openclaw\dist"
+   ```
+
 ## 修复效果
 
 ![修复后：web_fetch 成功](docs/Web_fetch_成功.png)
